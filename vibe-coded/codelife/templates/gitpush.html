@@ -28,14 +28,16 @@
 </div>
 {% else %}
 
-<div class="gitpush-grid">
+<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:20px;height:calc(100vh - 160px)">
 
-  <!-- LEFT: Folder + settings -->
-  <div class="gp-left">
+  <!-- LEFT: flex column with scroll area + sticky buttons -->
+  <div style="display:flex;flex-direction:column;height:100%">
+
+    <!-- Scrollable area -->
+    <div style="flex:1;overflow-y:auto;padding-right:4px;padding-bottom:8px;display:flex;flex-direction:column;gap:16px">
+
     <div class="card">
-      <div class="card-header">
-        <span class="card-title">📁 Folder & Remote</span>
-      </div>
+      <div class="card-header"><span class="card-title">📁 Folder & Remote</span></div>
       <div class="card-body">
 
         <div class="form-group">
@@ -57,8 +59,7 @@
 
         <div class="form-group">
           <label class="form-label">Commit message</label>
-          <input type="text" class="form-input" id="gp-commit"
-                 placeholder="feat: add new feature"/>
+          <input type="text" class="form-input" id="gp-commit" placeholder="feat: add new feature"/>
           <button class="btn-ai-suggest" id="btn-ai-commit">🤖 AI suggest</button>
         </div>
 
@@ -85,7 +86,7 @@
       </div>
     </div>
 
-    <!-- Selective file list — hidden until checkbox ticked -->
+    <!-- File list card — hidden until checkbox ticked -->
     <div class="card" id="files-card" style="display:none">
       <div class="card-header">
         <span class="card-title">📄 Changed Files</span>
@@ -95,30 +96,28 @@
           <button class="btn-validate" id="btn-refresh">🔄 Refresh</button>
         </div>
       </div>
-      <div class="card-body" style="height:200px;overflow-y:scroll;overflow-x:hidden;padding-right:4px;box-sizing:border-box">
-        <div id="files-list">
-          <div class="empty-state">Enter folder path above then click Refresh</div>
-        </div>
-      </div>
+      <div id="files-list" style="max-height:200px;overflow-y:auto;padding:12px 16px"></div>
     </div>
 
-    <div class="gp-actions">
-      <button class="btn-secondary" id="btn-preview">👁 Preview</button>
-      <button class="btn-primary" id="push-btn">🚀 Push to GitHub</button>
+    </div> <!-- end scrollable area -->
+
+    <!-- Sticky action buttons at bottom -->
+    <div style="display:flex;gap:10px;padding-top:12px;flex-shrink:0">
+      <button class="btn-secondary" style="flex:1" id="btn-preview">👁 Preview</button>
+      <button class="btn-primary" style="flex:2" id="push-btn">🚀 Push to GitHub</button>
     </div>
+
   </div>
 
-  <!-- RIGHT: Output log -->
-  <div class="gp-right">
-    <div class="card" style="height:100%">
+  <!-- RIGHT: log panel — independently scrollable -->
+  <div style="display:flex;flex-direction:column;height:100%">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
       <div class="card-header">
         <span class="card-title">📋 Output Log</span>
         <button class="btn-validate" id="btn-clear">Clear</button>
       </div>
-      <div class="card-body" style="padding:0">
-        <div class="gp-log" id="gp-log">
-          <div class="log-line muted">Ready. Select a folder and push.</div>
-        </div>
+      <div id="gp-log" style="flex:1;overflow-y:auto;padding:14px;font-size:11px;line-height:1.8;background:var(--bg)">
+        <div style="color:var(--text3)">Ready. Select a folder and push.</div>
       </div>
     </div>
   </div>
@@ -126,98 +125,101 @@
 </div>
 
 <script>
+// Global path store — avoids HTML attribute encoding issues
+var FILE_PATHS = [];
+
 document.addEventListener('DOMContentLoaded', function() {
 
-  // ── Elements ──
-  const folderEl   = document.getElementById('gp-folder');
-  const remoteEl   = document.getElementById('gp-remote');
-  const commitEl   = document.getElementById('gp-commit');
-  const branchEl   = document.getElementById('gp-branch');
-  const junkEl     = document.getElementById('gp-junk');
-  const sensitiveEl= document.getElementById('gp-sensitive');
-  const selectiveEl= document.getElementById('gp-selective');
-  const filesCard  = document.getElementById('files-card');
-  const filesList  = document.getElementById('files-list');
-  const logBox     = document.getElementById('gp-log');
+  var folderEl    = document.getElementById('gp-folder');
+  var remoteEl    = document.getElementById('gp-remote');
+  var commitEl    = document.getElementById('gp-commit');
+  var branchEl    = document.getElementById('gp-branch');
+  var junkEl      = document.getElementById('gp-junk');
+  var sensitiveEl = document.getElementById('gp-sensitive');
+  var selectiveEl = document.getElementById('gp-selective');
+  var filesCard   = document.getElementById('files-card');
+  var filesList   = document.getElementById('files-list');
+  var logBox      = document.getElementById('gp-log');
 
-  // ── Log helper ──
-  function log(msg, cls) {
-    const line = document.createElement('div');
-    line.className = 'log-line' + (cls ? ' ' + cls : '');
-    line.textContent = msg;
-    logBox.appendChild(line);
+  function log(msg, color) {
+    var div = document.createElement('div');
+    div.textContent = msg;
+    div.style.color = color || 'var(--text2)';
+    div.style.fontFamily = 'var(--font-mono)';
+    logBox.appendChild(div);
     logBox.scrollTop = logBox.scrollHeight;
   }
 
-  // ── Clear log ──
   document.getElementById('btn-clear').addEventListener('click', function() {
     logBox.innerHTML = '';
   });
 
-  // ── Detect branch ──
   document.getElementById('btn-detect').addEventListener('click', async function() {
-    const folder = folderEl.value.trim();
+    var folder = folderEl.value.trim();
     if (!folder) { log('⚠ Enter folder path first'); return; }
-    const res = await fetch('/api/gitpush/detect-branch', {
+    var res = await fetch('/api/gitpush/detect-branch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({folder: folder})
     });
-    const data = await res.json();
+    var data = await res.json();
     branchEl.value = data.branch;
-    log('🌿 Detected branch: ' + data.branch, 'ok');
+    log('🌿 Detected branch: ' + data.branch, 'var(--green)');
   });
 
-  // ── Selective checkbox toggle ──
   selectiveEl.addEventListener('change', function() {
     if (this.checked) {
       filesCard.style.display = 'block';
-      const folder = folderEl.value.trim();
+      var folder = folderEl.value.trim();
       if (folder) {
-        loadFiles();
+        loadFiles(folder);
       } else {
-        filesList.innerHTML = '<div class="empty-state">Enter folder path above then click Refresh</div>';
+        filesList.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:4px 0">Enter folder path above then click Refresh</div>';
       }
     } else {
       filesCard.style.display = 'none';
     }
   });
 
-  // ── Load changed files ──
-  async function loadFiles() {
-    const folder = folderEl.value.trim();
-    if (!folder) { filesList.innerHTML = '<div class="empty-state">Enter folder path first</div>'; return; }
+  async function loadFiles(folder) {
+    if (!folder) folder = folderEl.value.trim();
+    if (!folder) {
+      filesList.innerHTML = '<div style="color:var(--text3);font-size:12px">Enter folder path first</div>';
+      return;
+    }
+    filesList.innerHTML = '<div style="color:var(--text3);font-size:12px">Loading...</div>';
+    FILE_PATHS = [];
 
-    filesList.innerHTML = '<div class="empty-state">Loading...</div>';
-
-    const res = await fetch('/api/gitpush/changed-files', {
+    var res = await fetch('/api/gitpush/changed-files', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({folder: folder})
     });
-    const data = await res.json();
+    var data = await res.json();
 
     if (!data.ok) {
-      filesList.innerHTML = '<div class="empty-state">' + data.error + '</div>';
+      filesList.innerHTML = '<div style="color:var(--red);font-size:12px">' + data.error + '</div>';
       return;
     }
     if (!data.files.length) {
-      filesList.innerHTML = '<div class="empty-state">✓ No changed files found</div>';
+      filesList.innerHTML = '<div style="color:var(--text3);font-size:12px">✓ No changed files</div>';
       return;
     }
 
-    filesList.innerHTML = data.files.map(function(f) {
-      // Use data-path to avoid any value truncation issues
-      return '<label class="file-check-row">' +
-        '<input type="checkbox" class="file-cb" data-path="' + f.path + '" checked/>' +
-        '<span class="file-status-tag">' + f.status + '</span>' +
-        '<span class="file-path" title="' + f.path + '">' + f.path + '</span>' +
+    // Store paths in JS array — NOT in HTML attributes
+    FILE_PATHS = data.files.map(function(f) { return f.path; });
+
+    var html = data.files.map(function(f, i) {
+      return '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border)">' +
+        '<input type="checkbox" class="file-cb" data-idx="' + i + '" checked style="accent-color:var(--green);flex-shrink:0"/>' +
+        '<span style="background:var(--bg4);color:var(--amber);font-size:9px;padding:1px 5px;border-radius:3px;flex-shrink:0;min-width:55px;text-align:center">' + f.status + '</span>' +
+        '<span style="color:var(--text2);word-break:break-all">' + f.path + '</span>' +
         '</label>';
     }).join('');
+    filesList.innerHTML = html;
   }
 
-  // ── Refresh, All, None buttons ──
-  document.getElementById('btn-refresh').addEventListener('click', loadFiles);
+  document.getElementById('btn-refresh').addEventListener('click', function() { loadFiles(); });
   document.getElementById('btn-all').addEventListener('click', function() {
     document.querySelectorAll('.file-cb').forEach(function(cb) { cb.checked = true; });
   });
@@ -225,77 +227,73 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.file-cb').forEach(function(cb) { cb.checked = false; });
   });
 
-  // ── Preview cleanup ──
   document.getElementById('btn-preview').addEventListener('click', async function() {
-    const folder = folderEl.value.trim();
+    var folder = folderEl.value.trim();
     if (!folder) { log('⚠ Enter folder path first'); return; }
-    const res = await fetch('/api/gitpush/preview-cleanup', {
+    var res = await fetch('/api/gitpush/preview-cleanup', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({folder: folder})
     });
-    const data = await res.json();
+    var data = await res.json();
     log('─'.repeat(40));
-    log('🔍 Preview for: ' + folder);
-    log('🗑  Junk folders to delete: ' + data.junk_folders);
-    log('🗑  Junk files to delete: ' + data.junk_files);
+    log('🔍 Preview: ' + folder);
+    log('🗑  Junk folders: ' + data.junk_folders);
+    log('🗑  Junk files: ' + data.junk_files);
     if (data.sensitive_files && data.sensitive_files.length) {
-      log('🔒 Sensitive files (gitignored):');
+      log('🔒 Sensitive files found:');
       data.sensitive_files.forEach(function(f) { log('   ' + f); });
     } else {
-      log('✓  No sensitive files found');
+      log('✓  No sensitive files');
     }
   });
 
-  // ── AI commit suggest ──
   document.getElementById('btn-ai-commit').addEventListener('click', async function() {
-    const btn = this;
+    var btn = this;
     btn.textContent = '⏳ Thinking...';
     btn.disabled = true;
-
-    const files = Array.from(document.querySelectorAll('.file-cb:checked')).map(function(cb) {
-      return { status: 'Modified', path: cb.getAttribute('data-path') };
+    var files = Array.from(document.querySelectorAll('.file-cb:checked')).map(function(cb) {
+      return {status: 'Modified', path: FILE_PATHS[parseInt(cb.getAttribute('data-idx'))]};
     });
-    const folder = folderEl.value.trim();
-
-    const res = await fetch('/api/ai/commit-message', {
+    var res = await fetch('/api/ai/commit-message', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: files, project: folder.split(/[/\\]/).pop(), context: '' })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({files: files, project: folderEl.value.trim().split(/[/\\]/).pop(), context: ''})
     });
-    const data = await res.json();
+    var data = await res.json();
     btn.textContent = '🤖 AI suggest';
     btn.disabled = false;
-
     if (data.ok && data.options.length) {
       commitEl.value = data.options[0];
-      log('🤖 AI suggested: ' + data.options[0], 'ok');
+      log('🤖 ' + data.options[0], 'var(--green)');
       data.options.slice(1).forEach(function(o) { log('   · ' + o); });
     } else {
-      log('⚠ ' + (data.error || 'Could not generate message'));
+      log('⚠ ' + (data.error || 'Could not generate'), 'var(--amber)');
     }
   });
 
-  // ── Push to GitHub ──
   document.getElementById('push-btn').addEventListener('click', async function() {
-    const folder   = folderEl.value.trim();
-    const remote   = remoteEl.value.trim();
-    const commit   = commitEl.value.trim() || 'Update via CodeLife';
-    const branch   = branchEl.value.trim() || 'main';
-    const selective= selectiveEl.checked;
+    var folder   = folderEl.value.trim();
+    var remote   = remoteEl.value.trim();
+    var commit   = commitEl.value.trim() || 'Update via CodeLife';
+    var branch   = branchEl.value.trim() || 'main';
+    var selective = selectiveEl.checked;
 
-    if (!folder) { log('⚠ Folder path is required'); return; }
-    if (!remote)  { log('⚠ Remote URL is required'); return; }
+    if (!folder) { log('⚠ Folder path is required', 'var(--amber)'); return; }
+    if (!remote)  { log('⚠ Remote URL is required', 'var(--amber)'); return; }
 
-    let specificFiles = null;
+    var specificFiles = null;
     if (selective) {
       specificFiles = Array.from(document.querySelectorAll('.file-cb:checked')).map(function(cb) {
-        return cb.getAttribute('data-path');
+        // Read directly from JS array — no HTML encoding issues
+        return FILE_PATHS[parseInt(cb.getAttribute('data-idx'))];
       });
-      if (!specificFiles.length) { log('⚠ No files selected — check at least one'); return; }
+      if (!specificFiles.length) { log('⚠ No files selected', 'var(--amber)'); return; }
+      log('📄 Staging ' + specificFiles.length + ' file(s):');
+      specificFiles.forEach(function(p) { log('   ' + p); });
     }
 
-    const btn = this;
+    var btn = this;
     btn.textContent = '⏳ Pushing...';
     btn.disabled = true;
 
@@ -304,11 +302,10 @@ document.addEventListener('DOMContentLoaded', function() {
     log('🔗 ' + remote);
     log('📝 ' + commit);
     log('🌿 ' + branch);
-    if (specificFiles) log('📄 Staging ' + specificFiles.length + ' file(s)');
 
-    const res = await fetch('/api/gitpush/push', {
+    var res = await fetch('/api/gitpush/push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         folder: folder,
         remote_url: remote,
@@ -319,16 +316,17 @@ document.addEventListener('DOMContentLoaded', function() {
         protect_sensitive: sensitiveEl.checked
       })
     });
-    const data = await res.json();
+    var data = await res.json();
     btn.textContent = '🚀 Push to GitHub';
     btn.disabled = false;
 
     data.log.forEach(function(line) {
-      log(line, line.includes('✅') ? 'ok' : line.includes('❌') ? 'err' : '');
+      var color = line.includes('✅') ? 'var(--green)' : line.includes('❌') ? 'var(--red)' : 'var(--text2)';
+      log(line, color);
     });
   });
 
-}); // end DOMContentLoaded
+});
 </script>
 {% endif %}
 {% endblock %}

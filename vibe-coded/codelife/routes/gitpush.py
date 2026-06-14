@@ -104,6 +104,9 @@ def push():
     commit_msg = body.get("commit_message", "Update via CodeLife").strip()
     branch = body.get("branch", "main").strip()
     specific_files = body.get("specific_files", None)
+    # Strip any quotes git may have added to paths
+    if specific_files:
+        specific_files = [f.strip().strip('"').strip("'") for f in specific_files]
     remove_junk = body.get("remove_junk", True)
     protect_sensitive = body.get("protect_sensitive", True)
 
@@ -123,6 +126,12 @@ def push():
     if cleanup:
         cleanup_log = cleanup.run_cleanup(folder, remove_junk, protect_sensitive)
         log.extend(cleanup_log)
+
+    # Log exact paths being staged for debugging
+    if specific_files:
+        log.append(f"📄 Staging paths received:")
+        for f in specific_files:
+            log.append(f"   [{repr(f)}]")
 
     # Git pipeline
     steps = git_ops.full_push_pipeline(

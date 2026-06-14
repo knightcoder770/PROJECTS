@@ -68,7 +68,7 @@ def git_get_changed_files(folder_path: str) -> list[dict]:
             continue
         # git porcelain gives 2-char XY status codes (e.g. "MM", "??", " M", "AD")
         xy = line[:2]
-        filepath = line[3:].strip()
+        filepath = line[3:].strip().strip('"')  # git quotes paths with special chars
 
         # Decode both X (index/staged) and Y (worktree) status chars
         char_map = {

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}CodeLife{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% if show_sidebar is not false %}
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">⚡</span>
+      <span class="logo-text">CodeLife</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('dashboard.dashboard') }}"
+         class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+        <span class="nav-icon">🏠</span><span>Dashboard</span>
+      </a>
+      <a href="{{ url_for('timer.timer') }}"
+         class="nav-item {% if active_page == 'timer' %}active{% endif %}">
+        <span class="nav-icon">⏱</span><span>Session Timer</span>
+      </a>
+      <a href="{{ url_for('timer.study') }}"
+         class="nav-item {% if active_page == 'study' %}active{% endif %}">
+        <span class="nav-icon">📚</span><span>Study Tracker</span>
+      </a>
+      <a href="{{ url_for('gitpush.gitpush') }}"
+         class="nav-item {% if active_page == 'gitpush' %}active{% endif %}">
+        <span class="nav-icon">🚀</span><span>GitPush</span>
+      </a>
+      <a href="{{ url_for('ai.ai_brain') }}"
+         class="nav-item {% if active_page == 'ai' %}active{% endif %}">
+        <span class="nav-icon">🤖</span><span>AI Brain</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-streak">
+        <span class="streak-fire">🔥</span>
+        <span id="streak-count">--</span>
+        <span class="streak-label">day streak</span>
+      </div>
+      <a href="{{ url_for('setup.reset_setup') }}" class="reset-link">⚙ Settings</a>
+    </div>
+  </aside>
+  {% endif %}
+
+  <main class="main-content {% if show_sidebar is false %}full-width{% endif %}">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% set show_sidebar = false %}
+
+{% block title %}CodeLife — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-container">
+  <div class="setup-header">
+    <div class="setup-logo">⚡ CodeLife</div>
+    <p class="setup-subtitle">Your personal dev OS — let's get you set up</p>
+  </div>
+
+  <div class="setup-steps">
+    <!-- Step indicators -->
+    <div class="step-indicators">
+      <div class="step-dot active" id="dot-1">1</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-2">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-3">3</div>
+    </div>
+
+    <!-- Step 1: Who are you -->
+    <div class="step-panel active" id="step-1">
+      <h2 class="step-title">Who are you?</h2>
+      <p class="step-desc">CodeLife personalises everything around you.</p>
+
+      <div class="form-group">
+        <label class="form-label">Your name</label>
+        <input type="text" class="form-input" id="user-name" placeholder="Harsha" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">GitHub username</label>
+        <input type="text" class="form-input" id="github-username" placeholder="knightcoder770" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Daily coding goal (hours)</label>
+        <input type="number" class="form-input" id="daily-goal" value="8" min="1" max="16" />
+      </div>
+
+      <button class="btn-primary" onclick="goToStep(2)">Continue →</button>
+    </div>
+
+    <!-- Step 2: Connect your tools -->
+    <div class="step-panel" id="step-2">
+      <h2 class="step-title">Connect your tools</h2>
+      <p class="step-desc">Point CodeLife to your existing DevTrack and GitPush folders. Your data stays local — CodeLife just reads the same files.</p>
+
+      <div class="form-group">
+        <label class="form-label">DevTrack folder path</label>
+        <div class="path-input-row">
+          <input type="text" class="form-input" id="devtrack-path"
+                 placeholder="F:\projects\devtrack" />
+          <button class="btn-validate" onclick="validatePath('devtrack')">Validate</button>
+        </div>
+        <div class="path-status" id="devtrack-status"></div>
+        <span class="form-hint">The folder containing your devtrack_data.json</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">GitPush folder path</label>
+        <div class="path-input-row">
+          <input type="text" class="form-input" id="gitpush-path"
+                 placeholder="F:\projects\vibe-coded\gitpush" />
+          <button class="btn-validate" onclick="validatePath('gitpush')">Validate</button>
+        </div>
+        <div class="path-status" id="gitpush-status"></div>
+        <span class="form-hint">The folder containing git_ops.py</span>
+      </div>
+
+      <p class="form-hint" style="margin-top:12px">
+        ⚡ Both are optional — CodeLife works without them. You can connect them later via Settings.
+      </p>
+
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goToStep(1)">← Back</button>
+        <button class="btn-primary" onclick="goToStep(3)">Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Roadmap position -->
+    <div class="step-panel" id="step-3">
+      <h2 class="step-title">Where are you in your roadmap?</h2>
+      <p class="step-desc">CodeLife tracks your 6-month AI engineering journey.</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Current month</label>
+          <select class="form-input" id="current-month">
+            <option value="1">Month 1 — Python foundations</option>
+            <option value="2">Month 2 — ML with scikit-learn</option>
+            <option value="3">Month 3 — Deep learning + PyTorch</option>
+            <option value="4">Month 4 — LLMs + LangChain + RAG</option>
+            <option value="5">Month 5 — Portfolio + GitHub</option>
+            <option value="6">Month 6 — Applications</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Current week</label>
+          <select class="form-input" id="current-week">
+            <option value="1">Week 1</option>
+            <option value="2">Week 2</option>
+            <option value="3" selected>Week 3</option>
+            <option value="4">Week 4</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Roadmap start date</label>
+        <input type="date" class="form-input" id="roadmap-start" />
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goToStep(2)">← Back</button>
+        <button class="btn-primary" onclick="finishSetup()">Launch CodeLife ⚡</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function goToStep(n) {
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.step-dot').forEach(d => d.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  document.getElementById('dot-' + n).classList.add('active');
+}
+
+async function validatePath(type) {
+  const input = document.getElementById(type + '-path');
+  const status = document.getElementById(type + '-status');
+  const path = input.value.trim();
+
+  if (!path) {
+    status.innerHTML = '<span class="status-warn">⚠ Enter a path first</span>';
+    return;
+  }
+
+  status.innerHTML = '<span class="status-checking">Checking...</span>';
+
+  const res = await fetch('/setup/validate-path', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, path })
+  });
+  const data = await res.json();
+
+  if (data.valid) {
+    status.innerHTML = '<span class="status-ok">✓ Found!</span>';
+    input.classList.add('input-ok');
+    input.classList.remove('input-err');
+  } else {
+    status.innerHTML = '<span class="status-err">✗ Not found — check the path</span>';
+    input.classList.add('input-err');
+    input.classList.remove('input-ok');
+  }
+}
+
+async function finishSetup() {
+  const payload = {
+    user_name: document.getElementById('user-name').value.trim(),
+    github_username: document.getElementById('github-username').value.trim(),
+    daily_goal_hours: document.getElementById('daily-goal').value,
+    devtrack_path: document.getElementById('devtrack-path').value.trim(),
+    gitpush_path: document.getElementById('gitpush-path').value.trim(),
+    current_month: document.getElementById('current-month').value,
+    current_week: document.getElementById('current-week').value,
+    roadmap_start_date: document.getElementById('roadmap-start').value,
+  };
+
+  const res = await fetch('/setup/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+  if (data.ok) {
+    window.location.href = '/dashboard';
+  }
+}
+</script>
+{% endblock %}

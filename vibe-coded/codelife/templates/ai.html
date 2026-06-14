@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% set active_page = 'ai' %}
+{% block title %}AI Brain — CodeLife{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="greeting">🤖 AI Brain</div>
+    <div class="date-text">Powered by Gemini 1.5 Flash · commit messages · summaries · README · error explainer</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <div class="conn-badge {% if api_key_set %}connected-badge{% else %}error-badge{% endif %}">
+      {% if api_key_set %}✓ API key set{% else %}✗ No API key{% endif %}
+    </div>
+    <button class="btn-secondary" onclick="toggleKeyPanel()" style="font-size:11px;padding:6px 14px">
+      🔑 {% if api_key_set %}Change Key{% else %}Add Key{% endif %}
+    </button>
+  </div>
+</div>
+
+<!-- API key panel — always available, hidden by default if key already set -->
+<div class="card" style="max-width:560px;margin-bottom:24px" id="key-panel"
+     {% if api_key_set %}style="display:none;max-width:560px;margin-bottom:24px"{% endif %}>
+  <div class="card-header">
+    <span class="card-title">🔑 Gemini API Key</span>
+    <span class="card-meta">stored in config.json · never uploaded</span>
+  </div>
+  <div class="card-body">
+    <p style="color:var(--text2);font-size:12px;margin-bottom:14px">
+      Get your free key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--green)">aistudio.google.com</a> → Get API key → Create API key.
+      1500 free requests/day.
+    </p>
+    <div class="path-input-row">
+      <input type="password" class="form-input" id="api-key-input" placeholder="AIza..."/>
+      <button class="btn-primary" onclick="saveApiKey()">Save</button>
+    </div>
+    <div id="key-feedback" class="feedback-msg"></div>
+  </div>
+</div>
+
+<div class="ai-grid">
+
+  <!-- Commit Message Generator -->
+  <div class="card ai-card">
+    <div class="card-header">
+      <span class="card-title">✍ Commit Message</span>
+      <span class="card-meta">conventional commits</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Project name</label>
+        <input type="text" class="form-input-sm" id="cm-project" placeholder="codelife"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">What changed? (paste diff or describe)</label>
+        <textarea class="ai-textarea" id="cm-context"
+                  placeholder="Added Pomodoro timer with auto session logging and goal checklist..."></textarea>
+      </div>
+      <button class="btn-primary btn-full" onclick="generateCommitMsg()">Generate 3 Options</button>
+      <div class="ai-result" id="cm-result"></div>
+    </div>
+  </div>
+
+  <!-- Error Explainer -->
+  <div class="card ai-card">
+    <div class="card-header">
+      <span class="card-title">🐛 Error Explainer</span>
+      <span class="card-meta">paste any Python traceback</span>
+    </div>
+    <div class="card-body">
+      <textarea class="ai-textarea" id="err-input"
+                placeholder="Traceback (most recent call last):&#10;  File &quot;app.py&quot;, line 42...&#10;RuntimeError: ..."></textarea>
+      <button class="btn-primary btn-full" onclick="explainError()">Explain & Fix</button>
+      <div class="ai-result" id="err-result"></div>
+    </div>
+  </div>
+
+  <!-- Daily Summary -->
+  <div class="card ai-card">
+    <div class="card-header">
+      <span class="card-title">📋 Daily Summary</span>
+      <span class="card-meta">based on your logged sessions</span>
+    </div>
+    <div class="card-body">
+      <div class="today-snapshot">
+        <span>🕐 {{ today.total_hours }}h coded</span>
+        <span>📂 {{ today.sessions }} sessions</span>
+        <span>🔥 {{ today.streak }} day streak</span>
+      </div>
+      <button class="btn-primary btn-full" onclick="generateSummary()" style="margin-top:12px">
+        Generate Summary
+      </button>
+      <div class="ai-result" id="summary-result"></div>
+    </div>
+  </div>
+
+  <!-- LinkedIn Post -->
+  <div class="card ai-card">
+    <div class="card-header">
+      <span class="card-title">💼 LinkedIn Post</span>
+      <span class="card-meta">authentic, not cringe</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">What did you build or learn today?</label>
+        <textarea class="ai-textarea" id="li-context"
+                  placeholder="Built a Pomodoro timer with auto-logging, integrated into CodeLife..."></textarea>
+      </div>
+      <button class="btn-primary btn-full" onclick="generateLinkedIn()">Write Post</button>
+      <div class="ai-result" id="li-result"></div>
+    </div>
+  </div>
+
+  <!-- README Generator -->
+  <div class="card ai-card">
+    <div class="card-header">
+      <span class="card-title">📄 README Generator</span>
+      <span class="card-meta">GitHub-ready markdown</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Project name</label>
+        <input type="text" class="form-input-sm" id="rm-name" placeholder="GitPush"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input-sm" id="rm-desc"
+               placeholder="Terminal UI tool to push folders to GitHub with smart cleanup"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tech stack</label>
+        <input type="text" class="form-input-sm" id="rm-tech"
+               placeholder="Python, Textual, subprocess, pathlib"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Key features</label>
+        <input type="text" class="form-input-sm" id="rm-features"
+               placeholder="Folder picker, junk cleanup, selective staging, live log"/>
+      </div>
+      <button class="btn-primary btn-full" onclick="generateReadme()">Generate README</button>
+      <div class="ai-result" id="rm-result"></div>
+    </div>
+  </div>
+
+  <!-- End of Day Report -->
+  <div class="card ai-card">
+    <div class="card-header">
+      <span class="card-title">🌙 End of Day Report</span>
+      <span class="card-meta">wins · assessment · tomorrow</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Anything extra to include?</label>
+        <textarea class="ai-textarea" id="eod-context" style="height:60px"
+                  placeholder="Fixed the branch detection bug, pushed CodeLife to GitHub..."></textarea>
+      </div>
+      <button class="btn-primary btn-full" onclick="generateEOD()">Generate Report</button>
+      <div class="ai-result" id="eod-result"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleKeyPanel() {
+  const panel = document.getElementById('key-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  const fb = document.getElementById('key-feedback');
+  if (!key) { fb.innerHTML = '<span class="err">Enter your API key</span>'; return; }
+
+  const res = await fetch('/api/ai/set-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: key })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    fb.innerHTML = '<span class="ok">✓ Key saved! Reloading...</span>';
+    setTimeout(() => window.location.reload(), 1000);
+  }
+}
+
+function setLoading(btnEl, loading) {
+  btnEl.disabled = loading;
+  btnEl.textContent = loading ? '⏳ Thinking...' : btnEl.dataset.label || btnEl.textContent;
+}
+
+function showResult(id, html, isError=false) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="ai-output ${isError ? 'ai-error' : ''}">${html}</div>`;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+}
+
+async function generateCommitMsg() {
+  const btn = event.target;
+  btn.dataset.label = btn.textContent;
+  setLoading(btn, true);
+
+  const res = await fetch('/api/ai/commit-message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      context: document.getElementById('cm-context').value,
+      project: document.getElementById('cm-project').value,
+      files: []
+    })
+  });
+  const data = await res.json();
+  btn.textContent = 'Generate 3 Options';
+  btn.disabled = false;
+
+  if (data.ok) {
+    const html = data.options.map((o, i) => `
+      <div class="commit-option">
+        <span class="commit-num">${i+1}</span>
+        <code class="commit-text">${o}</code>
+        <button class="copy-btn" onclick="copyText('${o.replace(/'/g,"\\'")}')">Copy</button>
+      </div>
+    `).join('');
+    showResult('cm-result', html);
+  } else {
+    showResult('cm-result', data.error, true);
+  }
+}
+
+async function explainError() {
+  const btn = event.target;
+  btn.dataset.label = btn.textContent;
+  setLoading(btn, true);
+
+  const res = await fetch('/api/ai/error-explainer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ error: document.getElementById('err-input').value })
+  });
+  const data = await res.json();
+  btn.textContent = 'Explain & Fix';
+  btn.disabled = false;
+
+  if (data.ok) {
+    showResult('err-result', data.explanation.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'));
+  } else {
+    showResult('err-result', data.error, true);
+  }
+}
+
+async function generateSummary() {
+  const btn = event.target;
+  btn.dataset.label = btn.textContent;
+  setLoading(btn, true);
+
+  const res = await fetch('/api/ai/daily-summary', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  const data = await res.json();
+  btn.textContent = 'Generate Summary';
+  btn.disabled = false;
+
+  if (data.ok) {
+    showResult('summary-result', data.summary.replace(/\n/g, '<br>'));
+  } else {
+    showResult('summary-result', data.error, true);
+  }
+}
+
+async function generateLinkedIn() {
+  const btn = event.target;
+  btn.dataset.label = btn.textContent;
+  setLoading(btn, true);
+
+  const res = await fetch('/api/ai/linkedin-post', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context: document.getElementById('li-context').value })
+  });
+  const data = await res.json();
+  btn.textContent = 'Write Post';
+  btn.disabled = false;
+
+  if (data.ok) {
+    showResult('li-result',
+      `<div style="white-space:pre-wrap">${data.post}</div>
+       <button class="copy-btn" style="margin-top:10px" onclick="copyText(this.previousSibling.textContent)">📋 Copy Post</button>`
+    );
+  } else {
+    showResult('li-result', data.error, true);
+  }
+}
+
+async function generateReadme() {
+  const btn = event.target;
+  btn.dataset.label = btn.textContent;
+  setLoading(btn, true);
+
+  const res = await fetch('/api/ai/readme-generator', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_name: document.getElementById('rm-name').value,
+      description: document.getElementById('rm-desc').value,
+      tech_stack: document.getElementById('rm-tech').value,
+      features: document.getElementById('rm-features').value,
+    })
+  });
+  const data = await res.json();
+  btn.textContent = 'Generate README';
+  btn.disabled = false;
+
+  if (data.ok) {
+    showResult('rm-result',
+      `<pre class="readme-pre">${data.readme}</pre>
+       <button class="copy-btn" onclick="copyText(document.querySelector('#rm-result pre').textContent)">📋 Copy README</button>`
+    );
+  } else {
+    showResult('rm-result', data.error, true);
+  }
+}
+
+async function generateEOD() {
+  const btn = event.target;
+  btn.dataset.label = btn.textContent;
+  setLoading(btn, true);
+
+  const res = await fetch('/api/ai/end-of-day', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context: document.getElementById('eod-context').value })
+  });
+  const data = await res.json();
+  btn.textContent = 'Generate Report';
+  btn.disabled = false;
+
+  if (data.ok) {
+    showResult('eod-result', data.report.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'));
+  } else {
+    showResult('eod-result', data.error, true);
+  }
+}
+</script>
+{% endblock %}

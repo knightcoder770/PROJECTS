@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% set active_page = 'dashboard' %}
+
+{% block title %}Dashboard — CodeLife{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="greeting" id="greeting-text">Good morning, {{ cfg.user_name }} 👋</div>
+    <div class="date-text" id="date-text">Loading...</div>
+  </div>
+  <div class="header-streak">
+    <span class="streak-fire-big">🔥</span>
+    <div>
+      <div class="streak-num">{{ today.streak }}</div>
+      <div class="streak-label-sm">day streak</div>
+    </div>
+  </div>
+</div>
+
+<!-- Top stats row -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-value" id="stat-hours">{{ today.total_hours }}h</div>
+    <div class="stat-label">coded today</div>
+    <div class="stat-bar">
+      <div class="stat-bar-fill" style="width: {{ [((today.total_hours / cfg.daily_goal_hours) * 100)|int, 100]|min }}%"></div>
+    </div>
+    <div class="stat-sub">goal: {{ cfg.daily_goal_hours }}h</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-value" id="stat-sessions">{{ today.sessions }}</div>
+    <div class="stat-label">sessions today</div>
+    <div class="stat-projects">
+      {% for p in today.projects %}
+        <span class="project-tag">{{ p }}</span>
+      {% else %}
+        <span class="stat-sub">no sessions yet</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-value">M{{ cfg.current_month }} W{{ cfg.current_week }}</div>
+    <div class="stat-label">roadmap position</div>
+    <div class="stat-sub">
+      {{ ((cfg.current_month - 1) * 4 + cfg.current_week) }} of 24 weeks
+    </div>
+    <div class="stat-bar">
+      <div class="stat-bar-fill accent"
+           style="width: {{ [((((cfg.current_month - 1) * 4 + cfg.current_week) / 24) * 100)|int, 100]|min }}%">
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-value">{{ today.longest_streak }}</div>
+    <div class="stat-label">longest streak</div>
+    <div class="stat-sub">keep pushing 💪</div>
+  </div>
+</div>
+
+<!-- Main grid -->
+<div class="main-grid">
+
+  <!-- LEFT column -->
+  <div class="left-col">
+
+    <!-- Log a session -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">⏱ Log Session</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <input type="text" class="form-input-sm" id="session-project"
+                 placeholder="Project name (e.g. week3-visualization)" />
+        </div>
+        <div class="form-row-sm">
+          <input type="number" class="form-input-sm" id="session-duration"
+                 placeholder="Minutes" min="1" max="480" />
+          <button class="btn-sm-primary" onclick="logSession()">+ Log</button>
+        </div>
+        <input type="text" class="form-input-sm" id="session-notes"
+               placeholder="Notes (optional)" style="margin-top:8px"/>
+        <div id="session-feedback" class="feedback-msg"></div>
+      </div>
+    </div>
+
+    <!-- Weekly activity -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📊 This Week</span>
+      </div>
+      <div class="card-body">
+        <div class="week-chart" id="week-chart">
+          {% for day in weekly.days %}
+          <div class="week-bar-col">
+            <div class="week-bar-wrap">
+              <div class="week-bar"
+                   style="height: {{ [((day.hours / cfg.daily_goal_hours) * 80)|int, 80]|min }}px"
+                   title="{{ day.hours }}h">
+              </div>
+            </div>
+            <div class="week-day">{{ day.day }}</div>
+            <div class="week-hours">{{ day.hours }}h</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- DevTrack connection status -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔗 Connections</span>
+      </div>
+      <div class="card-body connections-list">
+        <div class="connection-row">
+          <span class="conn-dot {% if cfg.devtrack_path %}connected{% endif %}"></span>
+          <span class="conn-name">DevTrack</span>
+          <span class="conn-status">{% if cfg.devtrack_path %}Connected{% else %}Not configured{% endif %}</span>
+        </div>
+        <div class="connection-row">
+          <span class="conn-dot {% if cfg.gitpush_path %}connected{% endif %}"></span>
+          <span class="conn-name">GitPush</span>
+          <span class="conn-status">{% if cfg.gitpush_path %}Connected{% else %}Not configured{% endif %}</span>
+        </div>
+        <div class="connection-row">
+          <span class="conn-dot connected"></span>
+          <span class="conn-name">Local data</span>
+          <span class="conn-status">Active</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT column -->
+  <div class="right-col">
+
+    <!-- Today's goals -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🎯 Week Goals</span>
+        <span class="card-meta">M{{ cfg.current_month }} W{{ cfg.current_week }}</span>
+      </div>
+      <div class="card-body">
+        <div class="goals-list" id="goals-list">
+          {% for goal in goals %}
+          <div class="goal-item {% if goal.done %}done{% endif %}" id="goal-{{ goal.id }}">
+            <button class="goal-check" onclick="toggleGoal({{ goal.id }})">
+              {{ '✓' if goal.done else '' }}
+            </button>
+            <span class="goal-text">{{ goal.text }}</span>
+          </div>
+          {% else %}
+          <div class="empty-state" id="goals-empty">No goals yet — add one below</div>
+          {% endfor %}
+        </div>
+        <div class="add-goal-row">
+          <input type="text" class="form-input-sm" id="goal-input"
+                 placeholder="Add a goal for this week..."
+                 onkeydown="if(event.key==='Enter') addGoal()" />
+          <button class="btn-sm-primary" onclick="addGoal()">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Roadmap topics this week -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📚 This Week's Topics</span>
+        <span class="card-meta">Month {{ cfg.current_month }} · Week {{ cfg.current_week }}</span>
+      </div>
+      <div class="card-body">
+        <div class="topics-list">
+          {% for topic in roadmap_topics %}
+          <div class="topic-item {% if topic in roadmap.topics_done %}done{% endif %}"
+               id="topic-{{ loop.index }}">
+            <button class="topic-check"
+                    onclick="markTopic('{{ topic }}', this)">
+              {{ '✓' if topic in roadmap.topics_done else '' }}
+            </button>
+            <span class="topic-text">{{ topic }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="topics-progress">
+          {% set done_count = roadmap.topics_done | length %}
+          {% set total = roadmap_topics | length %}
+          <div class="progress-bar">
+            <div class="progress-fill"
+                 style="width: {{ [(done_count / total * 100)|int if total > 0 else 0, 100]|min }}%">
+            </div>
+          </div>
+          <span class="progress-label">
+            {{ done_count }} / {{ total }} topics done this week
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">⚡ Quick Actions</span>
+      </div>
+      <div class="card-body">
+        <div class="quick-actions">
+          <button class="quick-btn coming" title="Coming in Phase 3">
+            🚀 Open GitPush
+          </button>
+          <button class="quick-btn coming" title="Coming in Phase 2">
+            ⏱ Start Pomodoro
+          </button>
+          <button class="quick-btn coming" title="Coming in Phase 3">
+            🤖 Ask AI Brain
+          </button>
+          <button class="quick-btn"
+                  onclick="window.open('https://github.com/{{ cfg.github_username }}', '_blank')">
+            🐙 My GitHub
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Live clock + greeting
+async function updateTime() {
+  const res = await fetch('/api/time');
+  const data = await res.json();
+  document.getElementById('greeting-text').textContent =
+    data.greeting + ', {{ cfg.user_name }} 👋';
+  document.getElementById('date-text').textContent = data.date;
+}
+updateTime();
+setInterval(updateTime, 60000);
+
+// Log session
+async function logSession() {
+  const project = document.getElementById('session-project').value.trim();
+  const duration = parseInt(document.getElementById('session-duration').value);
+  const notes = document.getElementById('session-notes').value.trim();
+  const fb = document.getElementById('session-feedback');
+
+  if (!project) { fb.innerHTML = '<span class="err">Enter a project name</span>'; return; }
+  if (!duration || duration <= 0) { fb.innerHTML = '<span class="err">Enter duration</span>'; return; }
+
+  const res = await fetch('/api/session/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project, duration_minutes: duration, notes })
+  });
+  const data = await res.json();
+
+  if (data.ok) {
+    fb.innerHTML = '<span class="ok">✓ Session logged!</span>';
+    document.getElementById('session-project').value = '';
+    document.getElementById('session-duration').value = '';
+    document.getElementById('session-notes').value = '';
+    document.getElementById('stat-hours').textContent = data.stats.total_hours + 'h';
+    document.getElementById('stat-sessions').textContent = data.stats.sessions;
+    setTimeout(() => fb.innerHTML = '', 3000);
+  }
+}
+
+// Add goal
+async function addGoal() {
+  const input = document.getElementById('goal-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const res = await fetch('/api/goals/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text })
+  });
+  const data = await res.json();
+
+  if (data.ok) {
+    input.value = '';
+    renderGoals(data.goals);
+  }
+}
+
+// Toggle goal
+async function toggleGoal(id) {
+  const res = await fetch('/api/goals/toggle/' + id, { method: 'POST' });
+  const data = await res.json();
+  const el = document.getElementById('goal-' + id);
+  const btn = el.querySelector('.goal-check');
+  if (data.done) {
+    el.classList.add('done');
+    btn.textContent = '✓';
+  } else {
+    el.classList.remove('done');
+    btn.textContent = '';
+  }
+}
+
+// Render goals
+function renderGoals(goals) {
+  const list = document.getElementById('goals-list');
+  if (!goals.length) {
+    list.innerHTML = '<div class="empty-state">No goals yet — add one below</div>';
+    return;
+  }
+  list.innerHTML = goals.map(g => `
+    <div class="goal-item ${g.done ? 'done' : ''}" id="goal-${g.id}">
+      <button class="goal-check" onclick="toggleGoal(${g.id})">${g.done ? '✓' : ''}</button>
+      <span class="goal-text">${g.text}</span>
+    </div>
+  `).join('');
+}
+
+// Mark topic done
+async function markTopic(topic, btn) {
+  await fetch('/api/roadmap/topic-done', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic })
+  });
+  const item = btn.closest('.topic-item');
+  item.classList.add('done');
+  btn.textContent = '✓';
+}
+
+// Sidebar streak
+fetch('/api/stats/today').then(r => r.json()).then(d => {
+  const el = document.getElementById('streak-count');
+  if (el) el.textContent = d.streak;
+});
+</script>
+{% endblock %}

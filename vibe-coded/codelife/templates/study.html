@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% set active_page = 'study' %}
+{% block title %}Study Tracker — CodeLife{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="greeting">📚 Study Tracker</div>
+    <div class="date-text">Month {{ cfg.current_month }} · Week {{ cfg.current_week }} · AI Engineering Roadmap</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn-secondary" onclick="showWeekPicker()">Change Week</button>
+  </div>
+</div>
+
+<div class="study-grid">
+
+  <!-- LEFT: Topics + progress -->
+  <div class="study-left">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 This Week's Topics</span>
+        <span class="card-meta">{{ topics | length }} topics</span>
+      </div>
+      <div class="card-body">
+        <div class="topics-list" id="topics-list">
+          {% for topic in topics %}
+          <div class="topic-item {% if topic in roadmap.topics_done %}done{% endif %}"
+               id="topic-row-{{ loop.index }}">
+            <button class="topic-check" onclick="markTopic('{{ topic }}', this)">
+              {{ '✓' if topic in roadmap.topics_done else '' }}
+            </button>
+            <span class="topic-text">{{ topic }}</span>
+          </div>
+          {% endfor %}
+        </div>
+
+        {% set done = roadmap.topics_done | length %}
+        {% set total = topics | length %}
+        <div class="topics-progress" style="margin-top:16px">
+          <div class="progress-bar">
+            <div class="progress-fill" id="topic-progress-fill"
+                 style="width: {{ [(done / total * 100)|int if total > 0 else 0, 100]|min }}%"></div>
+          </div>
+          <span class="progress-label" id="topic-progress-label">
+            {{ done }} / {{ total }} topics done
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Roadmap overview -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🗺 Roadmap Overview</span>
+        <span class="card-meta">6 months · 24 weeks</span>
+      </div>
+      <div class="card-body">
+        {% set months = [
+          (1, 'Python Foundations', 'NumPy · Pandas · Visualization · Analysis'),
+          (2, 'ML with scikit-learn', 'Regression · Classification · Clustering · Pipelines'),
+          (3, 'Deep Learning + PyTorch', 'Neural Nets · CNNs · RNNs · Voice'),
+          (4, 'LLMs + LangChain + RAG', 'Prompt Eng · Chains · Agents · Vector DBs'),
+          (5, 'Portfolio + GitHub', 'Projects · README · Open Source · Blog'),
+          (6, 'Applications', 'Internship prep · Resume · LinkedIn · Apply'),
+        ] %}
+        <div class="roadmap-months">
+          {% for num, title, sub in months %}
+          <div class="roadmap-month {% if num == cfg.current_month %}active{% elif num < cfg.current_month %}done{% endif %}">
+            <div class="rm-number">M{{ num }}</div>
+            <div class="rm-info">
+              <div class="rm-title">{{ title }}</div>
+              <div class="rm-sub">{{ sub }}</div>
+            </div>
+            <div class="rm-status">
+              {% if num < cfg.current_month %}✓
+              {% elif num == cfg.current_month %}W{{ cfg.current_week }}
+              {% else %}–{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Weekly hours + notes -->
+  <div class="study-right">
+
+    <!-- Weekly coding hours -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📊 Weekly Coding Hours</span>
+        <span class="card-meta">last 7 days</span>
+      </div>
+      <div class="card-body">
+        <div class="week-chart">
+          {% for day in weekly.days %}
+          <div class="week-bar-col">
+            <div class="week-bar-wrap">
+              <div class="week-bar"
+                   style="height: {{ [((day.hours / cfg.daily_goal_hours) * 80)|int, 80]|min }}px"
+                   title="{{ day.hours }}h on {{ day.date }}"></div>
+            </div>
+            <div class="week-day">{{ day.day }}</div>
+            <div class="week-hours">{{ day.hours }}h</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% set total_week = weekly.days | sum(attribute='hours') %}
+        <div class="week-total">
+          Total this week: <strong style="color:var(--green)">{{ "%.1f"|format(total_week) }}h</strong>
+          &nbsp;·&nbsp; Goal: <strong>{{ cfg.daily_goal_hours * 7 }}h</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Study notes -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📝 Study Notes</span>
+        <span class="card-meta">saved locally</span>
+      </div>
+      <div class="card-body">
+        <textarea class="study-notes-area" id="study-notes"
+                  placeholder="Paste code snippets, key concepts, things to remember...&#10;&#10;These save automatically."
+                  oninput="saveNotes()">{{ roadmap.get('notes', '') }}</textarea>
+        <div class="feedback-msg" id="notes-feedback"></div>
+      </div>
+    </div>
+
+    <!-- Resources for current week -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔗 Resources · M{{ cfg.current_month }}W{{ cfg.current_week }}</span>
+      </div>
+      <div class="card-body">
+        <div class="resources-list">
+          {% if cfg.current_month == 1 and cfg.current_week == 3 %}
+          <a class="resource-link" href="https://matplotlib.org/stable/tutorials" target="_blank">📘 Matplotlib Tutorials</a>
+          <a class="resource-link" href="https://seaborn.pydata.org/tutorial.html" target="_blank">📘 Seaborn Tutorial</a>
+          <a class="resource-link" href="https://www.kaggle.com/learn/data-visualization" target="_blank">📘 Kaggle Data Viz Course</a>
+          {% elif cfg.current_month == 1 and cfg.current_week == 2 %}
+          <a class="resource-link" href="https://numpy.org/learn/" target="_blank">📘 NumPy Quickstart</a>
+          <a class="resource-link" href="https://pandas.pydata.org/docs/getting_started" target="_blank">📘 Pandas Getting Started</a>
+          {% elif cfg.current_month == 2 %}
+          <a class="resource-link" href="https://scikit-learn.org/stable/tutorial" target="_blank">📘 scikit-learn Tutorial</a>
+          <a class="resource-link" href="https://www.kaggle.com/learn/intro-to-machine-learning" target="_blank">📘 Kaggle ML Course</a>
+          {% elif cfg.current_month == 3 %}
+          <a class="resource-link" href="https://pytorch.org/tutorials" target="_blank">📘 PyTorch Tutorials</a>
+          <a class="resource-link" href="https://www.fast.ai" target="_blank">📘 fast.ai</a>
+          {% elif cfg.current_month == 4 %}
+          <a class="resource-link" href="https://python.langchain.com/docs" target="_blank">📘 LangChain Docs</a>
+          <a class="resource-link" href="https://docs.anthropic.com" target="_blank">📘 Claude API Docs</a>
+          {% else %}
+          <a class="resource-link" href="https://docs.anthropic.com" target="_blank">📘 Anthropic Docs</a>
+          <a class="resource-link" href="https://github.com/knightcoder770" target="_blank">🐙 Your GitHub</a>
+          {% endif %}
+          <a class="resource-link" href="https://leetcode.com" target="_blank">⚡ LeetCode</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Week picker modal -->
+<div class="modal-overlay" id="week-modal" style="display:none" onclick="hideWeekPicker()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Change Roadmap Position</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Month</label>
+        <select class="form-input" id="pick-month">
+          {% for i in range(1, 7) %}<option value="{{ i }}" {% if i == cfg.current_month %}selected{% endif %}>Month {{ i }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Week</label>
+        <select class="form-input" id="pick-week">
+          {% for i in range(1, 5) %}<option value="{{ i }}" {% if i == cfg.current_week %}selected{% endif %}>Week {{ i }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="hideWeekPicker()">Cancel</button>
+      <button class="btn-primary" onclick="saveWeek()">Save & Reload</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function markTopic(topic, btn) {
+  await fetch('/api/roadmap/topic-done', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic })
+  });
+  btn.closest('.topic-item').classList.add('done');
+  btn.textContent = '✓';
+
+  // Update progress
+  const done = document.querySelectorAll('.topic-item.done').length;
+  const total = document.querySelectorAll('.topic-item').length;
+  const pct = Math.round(done / total * 100);
+  document.getElementById('topic-progress-fill').style.width = pct + '%';
+  document.getElementById('topic-progress-label').textContent = done + ' / ' + total + ' topics done';
+}
+
+let notesTimer;
+async function saveNotes() {
+  clearTimeout(notesTimer);
+  notesTimer = setTimeout(async () => {
+    const notes = document.getElementById('study-notes').value;
+    await fetch('/api/roadmap/save-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes })
+    });
+    const fb = document.getElementById('notes-feedback');
+    fb.innerHTML = '<span class="ok">✓ Saved</span>';
+    setTimeout(() => fb.innerHTML = '', 2000);
+  }, 800);
+}
+
+function showWeekPicker() { document.getElementById('week-modal').style.display = 'flex'; }
+function hideWeekPicker() { document.getElementById('week-modal').style.display = 'none'; }
+
+async function saveWeek() {
+  const month = document.getElementById('pick-month').value;
+  const week = document.getElementById('pick-week').value;
+  await fetch('/api/config/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_month: parseInt(month), current_week: parseInt(week) })
+  });
+  window.location.reload();
+}
+</script>
+{% endblock %}

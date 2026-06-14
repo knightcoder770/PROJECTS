@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% set active_page = 'gitpush' %}
+{% block title %}GitPush — CodeLife{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="greeting">🚀 GitPush</div>
+    <div class="date-text">Push any folder to GitHub — cleanup included</div>
+  </div>
+  {% if connected %}
+  <div class="conn-badge connected-badge">✓ GitPush connected</div>
+  {% else %}
+  <div class="conn-badge error-badge">✗ GitPush not connected</div>
+  {% endif %}
+</div>
+
+{% if not connected %}
+<div class="card" style="max-width:600px">
+  <div class="card-body">
+    <div class="empty-state-big">
+      <div style="font-size:40px;margin-bottom:12px">🔌</div>
+      <div style="color:var(--text);font-size:14px;margin-bottom:8px">GitPush not configured</div>
+      <div style="color:var(--text2);font-size:12px;margin-bottom:20px">{{ error }}</div>
+      <a href="{{ url_for('setup.reset_setup') }}" class="btn-primary">Go to Settings</a>
+    </div>
+  </div>
+</div>
+{% else %}
+
+<div class="gitpush-grid">
+
+  <!-- LEFT: Folder + settings -->
+  <div class="gp-left">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📁 Folder & Remote</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Folder path</label>
+          <div class="path-input-row">
+            <input type="text" class="form-input" id="gp-folder"
+                   placeholder="F:\projects\vibe-coded\codelife"
+                   value="{{ cfg.last_folder or '' }}"
+                   oninput="onFolderChange()"/>
+            <button class="btn-validate" onclick="detectBranch()">Detect</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">GitHub remote URL</label>
+          <input type="text" class="form-input" id="gp-remote"
+                 placeholder="https://github.com/knightcoder770/PROJECTS.git"
+                 value="{{ cfg.last_remote_url or '' }}"/>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Commit message</label>
+          <input type="text" class="form-input" id="gp-commit"
+                 placeholder="feat: add new feature"/>
+          <button class="btn-ai-suggest" onclick="suggestCommitMessage()" id="ai-commit-btn">
+            🤖 AI suggest
+          </button>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Branch</label>
+            <input type="text" class="form-input" id="gp-branch" value="main" placeholder="main"/>
+          </div>
+        </div>
+
+        <div class="gp-checkboxes">
+          <label class="check-label">
+            <input type="checkbox" id="gp-junk" checked/>
+            <span>Remove __pycache__ & junk</span>
+          </label>
+          <label class="check-label">
+            <input type="checkbox" id="gp-sensitive" checked/>
+            <span>Protect .env & secrets</span>
+          </label>
+          <label class="check-label">
+            <input type="checkbox" id="gp-selective"/>
+            <span>Stage specific files only</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Selective file list -->
+    <div class="card" id="files-card" style="display:none">
+      <div class="card-header">
+        <span class="card-title">📄 Changed Files</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn-validate" onclick="checkAll(true)">All</button>
+          <button class="btn-validate" onclick="checkAll(false)">None</button>
+          <button class="btn-validate" onclick="loadFiles()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div class="card-body" style="max-height:220px;overflow-y:auto">
+        <div id="files-list">
+          <div class="empty-state">Enter a folder path and click Refresh</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gp-actions">
+      <button class="btn-secondary" onclick="previewCleanup()">👁 Preview</button>
+      <button class="btn-primary" onclick="pushToGitHub()" id="push-btn">🚀 Push to GitHub</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Output log -->
+  <div class="gp-right">
+    <div class="card" style="height:100%">
+      <div class="card-header">
+        <span class="card-title">📋 Output Log</span>
+        <button class="btn-validate" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="gp-log" id="gp-log">
+          <div class="log-line muted">Ready. Select a folder and push.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endif %}
+
+<script>
+const log = (msg, cls='') => {
+  const box = document.getElementById('gp-log');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + cls;
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+};
+
+function clearLog() {
+  document.getElementById('gp-log').innerHTML = '';
+}
+
+function onFolderChange() {
+  // Show files card if selective checkbox is checked
+  const sel = document.getElementById('gp-selective');
+  if (sel && sel.checked) document.getElementById('files-card').style.display = 'block';
+}
+
+document.getElementById('gp-selective')?.addEventListener('change', function() {
+  document.getElementById('files-card').style.display = this.checked ? 'block' : 'none';
+  if (this.checked) loadFiles();
+});
+
+async function detectBranch() {
+  const folder = document.getElementById('gp-folder').value.trim();
+  if (!folder) { log('⚠ Enter folder path first'); return; }
+  const res = await fetch('/api/gitpush/detect-branch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder })
+  });
+  const data = await res.json();
+  document.getElementById('gp-branch').value = data.branch;
+  log('🌿 Detected branch: ' + data.branch, 'ok');
+}
+
+async function loadFiles() {
+  const folder = document.getElementById('gp-folder').value.trim();
+  if (!folder) { log('⚠ Enter folder path first'); return; }
+
+  const res = await fetch('/api/gitpush/changed-files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder })
+  });
+  const data = await res.json();
+  const list = document.getElementById('files-list');
+
+  if (!data.ok) { list.innerHTML = '<div class="empty-state">' + data.error + '</div>'; return; }
+  if (!data.files.length) { list.innerHTML = '<div class="empty-state">✓ No changed files</div>'; return; }
+
+  list.innerHTML = data.files.map(f => `
+    <label class="file-check-row">
+      <input type="checkbox" class="file-cb" value="${f.path}" checked/>
+      <span class="file-status-tag">${f.status}</span>
+      <span class="file-path">${f.path}</span>
+    </label>
+  `).join('');
+}
+
+function checkAll(state) {
+  document.querySelectorAll('.file-cb').forEach(cb => cb.checked = state);
+}
+
+async function previewCleanup() {
+  const folder = document.getElementById('gp-folder').value.trim();
+  if (!folder) { log('⚠ Enter folder path first'); return; }
+
+  const res = await fetch('/api/gitpush/preview-cleanup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder })
+  });
+  const data = await res.json();
+  log('─'.repeat(40));
+  log('🔍 Preview for: ' + folder);
+  log('🗑  Junk folders to delete: ' + data.junk_folders);
+  log('🗑  Junk files to delete: ' + data.junk_files);
+  if (data.sensitive_files.length) {
+    log('🔒 Sensitive files (will be gitignored):');
+    data.sensitive_files.forEach(f => log('   ' + f));
+  } else {
+    log('✓  No sensitive files found');
+  }
+}
+
+async function suggestCommitMessage() {
+  const folder = document.getElementById('gp-folder').value.trim();
+  const btn = document.getElementById('ai-commit-btn');
+  btn.textContent = '⏳ Thinking...';
+  btn.disabled = true;
+
+  let files = [];
+  document.querySelectorAll('.file-cb:checked').forEach(cb => {
+    files.push({ status: 'Modified', path: cb.value });
+  });
+
+  const res = await fetch('/api/ai/commit-message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, project: folder.split(/[/\\]/).pop() })
+  });
+  const data = await res.json();
+  btn.textContent = '🤖 AI suggest';
+  btn.disabled = false;
+
+  if (data.ok && data.options.length) {
+    // Show options and let user pick
+    const pick = data.options[0]; // auto-pick first
+    document.getElementById('gp-commit').value = pick;
+    log('🤖 AI suggested: ' + pick, 'ok');
+    if (data.options.length > 1) {
+      log('   Other options:');
+      data.options.slice(1).forEach(o => log('   · ' + o));
+    }
+  } else {
+    log('⚠ ' + (data.error || 'Could not generate message'));
+  }
+}
+
+async function pushToGitHub() {
+  const folder = document.getElementById('gp-folder').value.trim();
+  const remote = document.getElementById('gp-remote').value.trim();
+  const commit = document.getElementById('gp-commit').value.trim() || 'Update via CodeLife';
+  const branch = document.getElementById('gp-branch').value.trim() || 'main';
+  const removeJunk = document.getElementById('gp-junk').checked;
+  const protectSensitive = document.getElementById('gp-sensitive').checked;
+  const selective = document.getElementById('gp-selective').checked;
+
+  if (!folder) { log('⚠ Folder path is required'); return; }
+  if (!remote) { log('⚠ Remote URL is required'); return; }
+
+  let specificFiles = null;
+  if (selective) {
+    specificFiles = [...document.querySelectorAll('.file-cb:checked')].map(cb => cb.value);
+    if (!specificFiles.length) { log('⚠ No files selected'); return; }
+  }
+
+  const btn = document.getElementById('push-btn');
+  btn.textContent = '⏳ Pushing...';
+  btn.disabled = true;
+
+  log('─'.repeat(40));
+  log('📁 ' + folder);
+  log('🔗 ' + remote);
+  log('📝 ' + commit);
+  log('🌿 ' + branch);
+
+  const res = await fetch('/api/gitpush/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, remote_url: remote, commit_message: commit,
+                           branch, specific_files: specificFiles,
+                           remove_junk: removeJunk, protect_sensitive: protectSensitive })
+  });
+  const data = await res.json();
+  btn.textContent = '🚀 Push to GitHub';
+  btn.disabled = false;
+
+  data.log.forEach(line => log(line, line.includes('✅') ? 'ok' : line.includes('❌') ? 'err' : ''));
+}
+</script>
+{% endblock %}

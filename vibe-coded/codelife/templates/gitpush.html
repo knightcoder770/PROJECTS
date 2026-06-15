@@ -207,11 +207,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Store paths in JS array — NOT in HTML attributes
-    FILE_PATHS = data.files.map(function(f) { return f.path; });
+    FILE_PATHS = ["__dummy__"].concat(data.files.map(function(f) { return f.path; }));
 
-    var html = data.files.map(function(f, i) {
+    var html = '<label style="display:none"><input type="checkbox" data-idx="0"/></label>' + data.files.map(function(f, i) {
       return '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border)">' +
-        '<input type="checkbox" class="file-cb" data-idx="' + i + '" checked style="accent-color:var(--green);flex-shrink:0"/>' +
+        '<input type="checkbox" class="file-cb" data-idx="' + (i+1) + '" checked style="accent-color:var(--green);flex-shrink:0"/>' +
         '<span style="background:var(--bg4);color:var(--amber);font-size:9px;padding:1px 5px;border-radius:3px;flex-shrink:0;min-width:55px;text-align:center">' + f.status + '</span>' +
         '<span style="color:var(--text2);word-break:break-all">' + f.path + '</span>' +
         '</label>';
@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
         remote_url: remote,
         commit_message: commit,
         branch: branch,
-        specific_files: specificFiles,
+        specific_files: specificFiles ? {files: specificFiles} : null,
         remove_junk: junkEl.checked,
         protect_sensitive: sensitiveEl.checked
       })

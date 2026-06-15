@@ -44,7 +44,11 @@ def git_add_specific(folder_path: str, files: list[str]) -> tuple[bool, str]:
     """Stage only the given list of file paths."""
     if not files:
         return False, "No files provided to stage."
-    return run_command(["git", "add", "--"] + files, cwd=folder_path)
+    clean = [f.strip().strip(chr(34)).strip(chr(39)).strip() for f in files if f.strip()]
+    # Log exactly what we send to git
+    debug = "git add -- " + " | ".join(repr(p) for p in clean)
+    success, output = run_command(["git", "add", "--"] + clean, cwd=folder_path)
+    return success, debug + "\n" + output
 
 
 def git_get_changed_files(folder_path: str) -> list[dict]:
@@ -68,7 +72,7 @@ def git_get_changed_files(folder_path: str) -> list[dict]:
             continue
         # git porcelain gives 2-char XY status codes (e.g. "MM", "??", " M", "AD")
         xy = line[:2]
-        filepath = line[3:].strip().strip('')  # git quotes paths with special chars
+        filepath = line[3:].strip().strip('"')  # git quotes paths with special chars
 
         # Decode both X (index/staged) and Y (worktree) status chars
         char_map = {
